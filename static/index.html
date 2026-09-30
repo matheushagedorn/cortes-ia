@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cortes IA</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 860px; margin: 0 auto; padding: 16px; background: #111; color: #eee; }
+  form { display: grid; gap: 12px; background: #1c1c1c; padding: 16px; border-radius: 8px; }
+  input, select, button { font: inherit; padding: 8px; border-radius: 6px; border: 1px solid #333; background: #222; color: #eee; }
+  button { background: #6c5ce7; border: none; cursor: pointer; }
+  button:disabled { opacity: .5; }
+  .ou { text-align: center; color: #888; }
+  #status { margin: 16px 0; color: #aaa; }
+  .clip { background: #1c1c1c; padding: 12px; border-radius: 8px; margin-bottom: 12px; }
+  .clip video { width: 100%; border-radius: 6px; }
+  .clip small { color: #999; }
+</style>
+</head>
+<body>
+<h1>Cortes IA</h1>
+<form id="f">
+  <label>Link (YouTube, X, Facebook, Reddit, Instagram, TikTok...)
+    <input name="url" type="url" placeholder="https://..." style="width:100%">
+  </label>
+  <div class="ou">ou</div>
+  <input name="file" type="file" accept="video/*">
+  <label>Categoria
+    <select name="category" id="category"></select>
+  </label>
+  <button id="btn">Gerar cortes</button>
+</form>
+<div id="status"></div>
+<div id="clips"></div>
+<script>
+const labels = { humor: "Humor", tecnologia: "Tecnologia", curiosidades: "Curiosidades", educacao: "Educação",
+  polemica: "Polêmica / opiniões", emocionante: "Emocionante", esportes: "Esportes", games: "Games" };
+fetch("/api/categories").then(r => r.json()).then(cs => {
+  category.innerHTML = cs.map(c => `<option value="${c}">${labels[c] || c}</option>`).join("");
+});
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+f.onsubmit = async e => {
+  e.preventDefault();
+  btn.disabled = true; clips.innerHTML = ""; status.textContent = "enviando...";
+  const r = await fetch("/api/jobs", { method: "POST", body: new FormData(f) });
+  const j = await r.json();
+  if (!r.ok) { status.textContent = j.detail; btn.disabled = false; return; }
+  const t0 = Date.now();
+  const poll = async () => {
+    const job = await (await fetch(`/api/jobs/${j.id}`)).json();
+    const secs = Math.round((Date.now() - t0) / 1000);
+    status.textContent = `${job.status} (${secs}s)` + (job.error ? `: ${job.error}` : "");
+    if (job.status === "pronto" || job.status === "erro") {
+      btn.disabled = false;
+      if (job.status === "pronto" && !job.clips.length) status.textContent = "nenhum trecho encontrado para essa categoria";
+      clips.innerHTML = job.clips.map(c => `
+        <div class="clip">
+          <h3>${esc(c.title)} <small>nota ${c.score} · ${esc(c.start)}–${esc(c.end)}</small></h3>
+          <video src="${c.file}" controls preload="metadata"></video>
+          <p><small>${esc(c.reason)}</small></p>
+          <a href="${c.file}" download>baixar</a>
+        </div>`).join("");
+      return;
+    }
+    setTimeout(poll, 2000);
+  };
+  poll();
+};
+</script>
+</body>
+</html>
