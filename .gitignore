@@ -3,3 +3,4 @@ jobs/
 .env
 __pycache__/
 server.log
+.codegraph/
